@@ -5,26 +5,22 @@ import sys
 class CPU:
     """Main CPU class."""
 
+    # LS8 instruction definitions
+    HLT = 1
+    LDI = 130
+    PRN = 71
+    MUL = 162
+
     def __init__(self):
         """Construct a new CPU."""
-        pass
+        self.pc = 0
+        self.ram = [00000000] * 256
+        self.reg = [0] * 8
 
-    def load(self):
+    def load(self, program):
         """Load a program into memory."""
 
         address = 0
-
-        # For now, we've just hardcoded a program:
-
-        program = [
-            # From print8.ls8
-            0b10000010, # LDI R0,8
-            0b00000000,
-            0b00001000,
-            0b01000111, # PRN R0
-            0b00000000,
-            0b00000001, # HLT
-        ]
 
         for instruction in program:
             self.ram[address] = instruction
@@ -36,9 +32,19 @@ class CPU:
 
         if op == "ADD":
             self.reg[reg_a] += self.reg[reg_b]
+        elif op == "MUL":
+            self.reg[reg_a] *= self.reg[reg_b]
         #elif op == "SUB": etc
         else:
             raise Exception("Unsupported ALU operation")
+
+    def ram_read(self, address):
+        if address > len(self.ram):
+            return 0
+        return self.ram[address]
+
+    def ram_write(self, address, data):
+        self.ram[address] = data
 
     def trace(self):
         """
@@ -62,4 +68,26 @@ class CPU:
 
     def run(self):
         """Run the CPU."""
-        pass
+        
+        running = True
+
+        while running:
+            ir = self.ram_read(self.pc)
+
+            if ir == self.HLT:
+                running = False
+            elif ir == self.LDI:
+                target_register = self.ram_read(self.pc + 1)
+                value = self.ram_read(self.pc + 2)
+                self.reg[target_register] = value
+                self.pc = self.pc + 3
+            elif ir == self.PRN:
+                print(self.reg[self.ram_read(self.pc + 1)])
+                self.pc = self.pc + 2
+            elif ir == self.MUL:
+                self.alu('MUL', self.ram_read(self.pc + 1), self.ram_read(self.pc + 2))
+                self.pc = self.pc + 3
+            else:
+                print('Bad instruction')
+                self.trace()
+                running = False
