@@ -2,6 +2,7 @@
 
 import sys
 
+
 class CPU:
     """Main CPU class."""
 
@@ -10,12 +11,22 @@ class CPU:
     LDI = 130
     PRN = 71
     MUL = 162
+    PUSH = 69
+    POP = 70
 
     def __init__(self):
         """Construct a new CPU."""
         self.pc = 0
         self.ram = [00000000] * 256
         self.reg = [0] * 8
+        self.reg[7] = 0xF4
+        self.dispatch = {}
+        self.dispatch[self.HLT] = self.halt
+        self.dispatch[self.LDI] = self.load_immediate
+        self.dispatch[self.PRN] = self.sys_out
+        self.dispatch[self.MUL] = self.mul
+        self.dispatch[self.PUSH] = self.push
+        self.dispatch[self.POP] = self.pop
 
     def load(self, program):
         """Load a program into memory."""
@@ -26,7 +37,6 @@ class CPU:
             self.ram[address] = instruction
             address += 1
 
-
     def alu(self, op, reg_a, reg_b):
         """ALU operations."""
 
@@ -34,7 +44,7 @@ class CPU:
             self.reg[reg_a] += self.reg[reg_b]
         elif op == "MUL":
             self.reg[reg_a] *= self.reg[reg_b]
-        #elif op == "SUB": etc
+        # elif op == "SUB": etc
         else:
             raise Exception("Unsupported ALU operation")
 
@@ -54,8 +64,8 @@ class CPU:
 
         print(f"TRACE: %02X | %02X %02X %02X |" % (
             self.pc,
-            #self.fl,
-            #self.ie,
+            # self.fl,
+            # self.ie,
             self.ram_read(self.pc),
             self.ram_read(self.pc + 1),
             self.ram_read(self.pc + 2)
@@ -66,28 +76,53 @@ class CPU:
 
         print()
 
+    def halt(self):
+        exit()
+
+    def load_immediate(self):
+        target_register = self.ram_read(self.pc + 1)
+        value = self.ram_read(self.pc + 2)
+        self.reg[target_register] = value
+        self.pc = self.pc + 3
+
+    def sys_out(self):
+        print(self.reg[self.ram_read(self.pc + 1)])
+        self.pc = self.pc + 2
+
+    def mul(self):
+        self.alu('MUL', self.ram_read(self.pc + 1), self.ram_read(self.pc + 2))
+        self.pc = self.pc + 3
+
+    def push(self):
+        self.reg[7] = self.reg[7] - 1
+        self.ram_write(self.reg[7], self.reg[self.ram_read(self.pc + 1)])
+        self.pc = self.pc + 2
+
+    def pop(self):
+        self.reg[self.ram_read(self.pc + 1)] = self.ram_read(self.reg[7])
+        self.reg[7] = self.reg[7] + 1
+        self.pc = self.pc + 2
+
     def run(self):
         """Run the CPU."""
-        
+
         running = True
 
         while running:
             ir = self.ram_read(self.pc)
 
-            if ir == self.HLT:
-                running = False
-            elif ir == self.LDI:
-                target_register = self.ram_read(self.pc + 1)
-                value = self.ram_read(self.pc + 2)
-                self.reg[target_register] = value
-                self.pc = self.pc + 3
-            elif ir == self.PRN:
-                print(self.reg[self.ram_read(self.pc + 1)])
-                self.pc = self.pc + 2
-            elif ir == self.MUL:
-                self.alu('MUL', self.ram_read(self.pc + 1), self.ram_read(self.pc + 2))
-                self.pc = self.pc + 3
-            else:
-                print('Bad instruction')
+            # We track the counter to make sure the
+            # insutruction we ran moved the counter,
+            # if it didn't, we advance to next instruction,
+            # as per the spec
+            old_counter = self.pc
+
+            if ir not in self.dispatch:
+                print('Bad insutruction')
                 self.trace()
-                running = False
+                self.halt()
+
+            self.dispatch[ir]()
+
+            if self.pc == old_counter:
+                self.pc = self.pc + 1
