@@ -8,11 +8,14 @@ class CPU:
 
     # LS8 instruction definitions
     HLT = 1
-    LDI = 130
-    PRN = 71
-    MUL = 162
+    RET = 17
     PUSH = 69
     POP = 70
+    PRN = 71
+    CALL = 80
+    LDI = 130
+    ADD = 160
+    MUL = 162
 
     def __init__(self):
         """Construct a new CPU."""
@@ -25,8 +28,11 @@ class CPU:
         self.dispatch[self.LDI] = self.load_immediate
         self.dispatch[self.PRN] = self.sys_out
         self.dispatch[self.MUL] = self.mul
+        self.dispatch[self.ADD] = self.add
         self.dispatch[self.PUSH] = self.push
         self.dispatch[self.POP] = self.pop
+        self.dispatch[self.CALL] = self.call
+        self.dispatch[self.RET] = self.ret
 
     def load(self, program):
         """Load a program into memory."""
@@ -89,6 +95,10 @@ class CPU:
         print(self.reg[self.ram_read(self.pc + 1)])
         self.pc = self.pc + 2
 
+    def add(self):
+        self.alu('ADD', self.ram_read(self.pc + 1), self.ram_read(self.pc + 2))
+        self.pc = self.pc + 3
+
     def mul(self):
         self.alu('MUL', self.ram_read(self.pc + 1), self.ram_read(self.pc + 2))
         self.pc = self.pc + 3
@@ -102,6 +112,15 @@ class CPU:
         self.reg[self.ram_read(self.pc + 1)] = self.ram_read(self.reg[7])
         self.reg[7] = self.reg[7] + 1
         self.pc = self.pc + 2
+
+    def call(self):
+        self.reg[7] = self.reg[7] - 1
+        self.ram_write(self.reg[7], self.pc + 2)
+        self.pc = self.reg[self.ram_read(self.pc + 1)]
+
+    def ret(self):
+        self.pc = self.ram_read(self.reg[7])
+        self.reg[7] = self.reg[7] + 1
 
     def run(self):
         """Run the CPU."""
@@ -118,7 +137,7 @@ class CPU:
             old_counter = self.pc
 
             if ir not in self.dispatch:
-                print('Bad insutruction')
+                print('Bad instruction')
                 self.trace()
                 self.halt()
 
