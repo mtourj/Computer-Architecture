@@ -1,7 +1,7 @@
 """CPU functionality."""
 
 import sys
-
+from util import set_bit
 
 class CPU:
     """Main CPU class."""
@@ -13,13 +13,18 @@ class CPU:
     POP = 70
     PRN = 71
     CALL = 80
+    JMP = 84
+    JEQ = 85
+    JNE = 86
     LDI = 130
     ADD = 160
     MUL = 162
+    CMP = 167
 
     def __init__(self):
         """Construct a new CPU."""
         self.pc = 0
+        self.fl = 0b00000000
         self.ram = [00000000] * 256
         self.reg = [0] * 8
         self.reg[7] = 0xF4
@@ -33,6 +38,10 @@ class CPU:
         self.dispatch[self.POP] = self.pop
         self.dispatch[self.CALL] = self.call
         self.dispatch[self.RET] = self.ret
+        self.dispatch[self.CMP] = self.cmp
+        self.dispatch[self.JMP] = self.jmp
+        self.dispatch[self.JNE] = self.jne
+        self.dispatch[self.JEQ] = self.jeq
 
     def load(self, program):
         """Load a program into memory."""
@@ -46,9 +55,13 @@ class CPU:
     def alu(self, op, reg_a, reg_b):
         """ALU operations."""
 
-        if op == "ADD":
+        if op == self.CMP:
+            self.fl = set_bit(self.fl, 2, self.reg[reg_a] < self.reg[reg_b])
+            self.fl = set_bit(self.fl, 1, self.reg[reg_a] > self.reg[reg_b])
+            self.fl = set_bit(self.fl, 0, self.reg[reg_a] == self.reg[reg_b])
+        elif op == self.ADD:
             self.reg[reg_a] += self.reg[reg_b]
-        elif op == "MUL":
+        elif op == self.MUL:
             self.reg[reg_a] *= self.reg[reg_b]
         # elif op == "SUB": etc
         else:
@@ -96,11 +109,11 @@ class CPU:
         self.pc = self.pc + 2
 
     def add(self):
-        self.alu('ADD', self.ram_read(self.pc + 1), self.ram_read(self.pc + 2))
+        self.alu(self.ADD, self.ram_read(self.pc + 1), self.ram_read(self.pc + 2))
         self.pc = self.pc + 3
 
     def mul(self):
-        self.alu('MUL', self.ram_read(self.pc + 1), self.ram_read(self.pc + 2))
+        self.alu(self.MUL, self.ram_read(self.pc + 1), self.ram_read(self.pc + 2))
         self.pc = self.pc + 3
 
     def push(self):
@@ -121,6 +134,26 @@ class CPU:
     def ret(self):
         self.pc = self.ram_read(self.reg[7])
         self.reg[7] = self.reg[7] + 1
+
+    def cmp(self):
+        self.alu(self.CMP, self.ram_read(self.pc + 1), self.ram_read(self.pc + 2))
+        self.pc = self.pc + 3
+
+    def jmp(self):
+        self.pc = self.reg[self.ram_read(self.pc + 1)]
+
+    def jne(self):
+        # Value is 1 means 0b00000001 (`e` flag on)
+        if self.fl != 1:
+            self.pc = self.reg[self.ram_read(self.pc + 1)]
+        else:
+            self.pc = self.pc + 2
+
+    def jeq(self):
+        if self.fl == 1:
+            self.pc = self.reg[self.ram_read(self.pc + 1)]
+        else:
+            self.pc = self.pc + 2
 
     def run(self):
         """Run the CPU."""
